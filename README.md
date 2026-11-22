@@ -71,6 +71,28 @@ The service is the only writer. The one exception is reading a Parquet file by h
 
 **Store layout.** One DuckLake table per kind above, partitioned by year and month of the trade date, sorted inside each file by root, expiration, strike, right and time. New units land as small files. A merge rewrites each touched month into one file, and files are deleted only after a grace period longer than the longest query, so a running query never loses one.
 
+## Time semantics
+
+**Every time column says exactly what it means (Trey, 2026-11-22).** Sources disagree on what a row "at 10:00" means. NinjaTrader and TradingView, for example, label a bar by different ends. Joining a bar labelled by its start to a snapshot at the same label silently uses a minute of the future. So the store never keeps a time that needs a convention to read:
+
+- **Events** (tick quotes, trades): `ts`, when it happened.
+- **Snapshots** (interval quotes, interval Greeks, index levels rebuilt from them): `ts`, the state as of `ts`, including anything at exactly `ts`. That's ThetaData's rule as measured: a 1-second row equals the last tick at or before that second.
+- **Bars** (OHLC from any source, daily bars, bars the service builds): `bar_start` and `bar_end`, covering [start, end). Never a single label.
+- **End-of-day rows**: the trade date, plus the instant the values stand for (e.g. ThetaData's report time) as its own column.
+- All of these are time-zone aware (above), plus `trade_date` and `session`.
+
+Each source's fetch layer converts its own convention once, at ingest, and only after a probe has confirmed what that convention is. The API joins bars to snapshots on `bar_end` = `ts`, so the 10:00 quote meets the bar that finished at 10:00; `md.py` gets a helper for it. A tick at exactly a bar boundary is in the snapshot at that time and in the bar that starts there; accepted as the standard bar convention.
+
+**ThetaData's conventions, probed 2026-11-22** (`spikes/time_semantics.py`; SPY 2024-03-15 0DTE 510 C, SPXW 2024-03-14 5145 C expiring that day and the next):
+- **Option OHLC** bars are labelled by their start and cover [t, t+1m), as documented. Bars rebuilt from `trade_quote` that way match on open, close, volume and count for every bar, and on high and low for all but 1–4 bars per day. The documented "SIP rules" probably leave some trades out of high and low. Labelling by the end matches almost nothing. A pull over 00:00–23:59 returns all 1,440 minutes, empty ones included.
+- **Interval Greeks** carry the same bid and ask as the interval quote at the same `ts` (391/391 rows, all three cases). `underlying_ms_of_day` always equals `ts`, so it can't show how old the underlying price is.
+- **The end-of-day row is a calendar-day report, not a trade date or a session.** It's generated at about 17:19–17:21 ET (`created`), not exactly 17:15. Its OHLCV counts trades from **00:00 on the calendar date up to the report**. For the non-expiring SPXW contract, that is exactly the trades 00:00–17:15: the overnight GTH half is in, and the evening 20:15+ GTH half of the same date, which belongs to the next trade date, is out. So it holds neither trade date D (which also includes the evening before) nor the regular session. Its close is the last trade before the report, 16:15:38 for SPY and 16:14:05 for SPXW, so trades in the 16:00–16:15 session count. Its bid and ask are the last quote before the report, which for non-expiring SPXW is the **last curb quote** (16:59:59.903, 3 × 15.10 / 3 × 24.60) and not the 16:00 or 16:15 quote. Greeks EOD uses the same quote, with `ms_of_day` = last trade time. The expiring SPXW row's open (32.89) and count (14,852 against 14,850 trades) match no trade window; unexplained.
+- **Replacing EOD** (`spikes/daily_snapshot.py`; SPY 2024-04-19 monthly, every strike, 20 trade dates in March 2024, one call each). Greeks EOD over the month took 15.8 s on one run and 27.7 s on another. First-order Greeks at 16:00 only (one row per contract-day, bid and ask included) took 35–37 s. Option OHLC over 00:00–23:59 took 55 s at 15 minutes (439k rows, empty bars included) and 50 s at 1 minute (6.6M rows). OHLC volume summed over 00:00–17:15 equals EOD volume for all 5,998 contract-days. 15-minute bars have an edge at every session boundary (07:30, 09:15, 09:30, 16:00, 16:15, 17:00, 20:15; nothing trades 09:25–09:30).
+- Trey, 2026-11-22: volume must not be decoupled from price. EOD volume covers a different window from any price snapshot, so EOD is not kept for volume either.
+- **So the service doesn't use ThetaData's EOD endpoints (Trey, 2026-11-22).** Daily figures come from a quote/Greeks snapshot at each product's session close from the calendar, plus OHLC bars summed per trade date and session, so price and volume cover windows that say what they are. Cost: roughly 4 times EOD's fetch time on the chain measured. Trade bars are stored at 15 minutes (Trey, 2026-11-22). Open: whether to drop empty bars at ingest, and the rough extrapolation to the Backtest-universe fill.
+
+Related times kept apart: when an event happened against when it was known (earnings at 16:30 ET belong to the next session for trading; true dates for now, see Events), the settlement instant per product (AM-settled SPX on the opening print, PM-settled SPXW at 16:00 or 13:00 on half days), and when the service fetched a unit (coverage).
+
 ## Events
 
 Clients need dates for earnings, economic releases and FOMC meetings.
