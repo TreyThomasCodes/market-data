@@ -2,7 +2,7 @@
 
 Trey's market-data service. It fetches data from every outside source once, keeps it in one store, and serves it to every client project through one HTTP API.
 
-**Status: design.** Nothing is built yet. Trey settled the main choices on 2026-11-21 (below); the open questions are at the end.
+**Status: design settled, build not started.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
 
 ## Why
 
@@ -56,9 +56,9 @@ The service is the only writer. The one exception is reading a Parquet file by h
 | Index levels | Built from option `underlying_price` | (root, trade date, interval) | Index endpoints return 403 on Trey's tier. SPX at 1 s comes from one near-the-money SPXW contract's Greeks. A `source` column says which contract it came from. |
 | Alphanume datasets | Alphanume API | (dataset, query) | Stored as returned. Recent rows keep changing (outcomes, lifecycle columns), so rows less than a set age refetch. |
 | Events | To be chosen (see [Events](#events)) | (kind, date range) | Earnings dates with time of day, economic releases, FOMC. |
-| Trading calendar | Built in | — | Sessions, half days, holidays (ThetaData's `calendar_year`), settlement time per root. Used by the service and served to clients. |
+| Trading calendar | Built in | — | Trading days and early closes (ThetaData's `calendar_year`); sessions per product with dated rule changes; holiday GTH hours; trade-date assignment; settlement time per root. Used by the service and served to clients. |
 
-**Fetch units, not queries.** A request is answered from the store when every unit it touches is covered. Otherwise the missing units are fetched and stored, then the answer is read from the store, so a client sees the same data whether or not a fetch happened. A request for one minute of a chain fetches the whole session at that interval, because the next script will want another minute.
+**Fetch units, not queries.** A request is answered from the store when every unit it touches is covered. Otherwise the missing units are fetched and stored, then the answer is read from the store, so a client sees the same data whether or not a fetch happened. A request for one minute of a chain fetches the whole regular session at that interval, because the next script will want another minute. Other sessions are fetched only when a request asks for them.
 
 **Coverage.** A table in the catalog database records each unit fetched, when, and its row count. Empty answers count, so weekends, holidays and delisted names are never fetched twice. To refetch something a source has corrected, delete its coverage row. There's no version history.
 
@@ -215,7 +215,7 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 ## Moving existing data in
 
-- **The research repo's ThetaData cache** (6.8 GB, 77,889 files):
+- **The research repo's ThetaData cache** (6.8 GB, 77,889 files). **Open (2026-11-22):** These were fetched through Trey's terminal, which runs on staging, and the service takes real data from production only (Trey, 2026-11-21). Staging and production differ in places (the 09:30 row on 2024-03-14, one row at 09:48). The options are to import nothing and refetch from production, or to import with the source environment recorded. If imported:
   - Import whole-session files as units.
   - Partial windows (single-minute snapshots, half sessions) don't make a full unit and aren't imported; they refetch on demand.
   - **ThetaData stock EOD isn't used, and the research repo's backfill (35,037 files) isn't imported (Trey, 2026-11-22).** Stock daily figures come from Alpaca bars by trade date and session. The free tier refuses dates before 2023-06-01 ("requiring a VALUE subscription", checked 2026-11-22). Those files stay where they are.
@@ -230,6 +230,70 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 - **Catalog:** its own Postgres instance on the same box (Trey, 2026-11-21), so each query's catalog round trip stays local.
 - **Secrets:** `THETADATA_API_KEY`, the Alpaca and Alphanume keys, and event-source keys go in an environment file readable only by the service user. Never in the repo, never in logs.
 - **Upkeep:** merges, snapshot expiry and file cleanup run on a schedule in the service.
+
+## Build plan
+
+Revised 2026-11-22 to match the decisions above. Each phase ends with a check that has to pass before the next one starts. The probes behind the findings become test cases.
+
+**Phase 0: Skeleton**
+- uv project with exact pins: DuckDB 2.0.1, DuckLake catalog format 1.1, ThetaDataDx (`thetadatadx-py`) 0.9.0, Polars, Starlette, uvicorn, psycopg.
+- A catalog Postgres instance of its own (not the `md-bench-tsdb` container, which stays as it is). A data directory on local NVMe, outside git.
+- An environment-file loader that never logs a secret. pytest.
+- Done when: the service starts, attaches the store, and `GET /status` answers.
+
+**Phase 1: The calendar.** It comes first because every label, unit and default depends on it.
+- Trading days and early closes from ThetaData's `calendar_year`, stored.
+- Session rules per product group, each with an effective date: GTH 20:15 to 09:15, then 09:25 from trade date 2024-08-26; regular hours ending at 16:15 or 16:00 per product and expiry; curb 16:15–17:00 for SPX, SPXW, XSP, VIX and RUTW; equity-option pre-market 07:30–09:25 from 2026-10-19; half days 13:00 or 13:15.
+- A hand-kept table of holiday GTH hours: none before Christmas and New Year, to about 11:30 ET on Thanksgiving, MLK Day and July 4.
+- Trade-date assignment as the exchange does it, including the holiday rule.
+- The labelling functions: from (`ts`, product, expiration) to (`trade_date`, `session`). Snapshots use (start, end], and events and bars use [start, end).
+- `GET /calendar`.
+- Done when: every probed date gives the measured answer. That includes 2024-03-14 (GTH to 09:15), 2024-08-26 (09:25 from then), 2024-11-28 (Thanksgiving GTH to 11:30), 2025-01-19 (Sunday before MLK), 2025-07-03 (half day with an evening session), and the 09:30:00 row falling outside regular hours.
+
+**Phase 2: The store.** No fetching yet.
+- One table per kind:
+  - `ts` (time-zone aware), `trade_date` and `session` stored on every row, computed from `ts` and the calendar.
+  - `seq` on quote ticks.
+  - `bar_start` and `bar_end` on bars.
+  - Partitioned by trade-date month.
+- Coverage committed in the same DuckLake transaction as the data.
+- The read path: list a request's units and split them into covered and missing.
+- The label check: recompute `trade_date` and `session` and compare.
+- Done when: the reads-while-writing correctness test from `spikes/storage/rw.py` passes as a real test. Merge settings wait for the merge spike.
+
+**Phase 3: Fetching from ThetaData**
+- One shared production client with 4 slots, bulk work limited to 3, `RESOURCE_EXHAUSTED` retried, `NotFoundError` stored as an empty answer, a pause during outages, single fetch for duplicate requests, and streaming for responses over about 100 MB.
+- Conversions when data comes in: `ms_of_day` and integer dates to `ts`, `C`/`P` rights, `seq` on quote ticks, empty OHLC bars dropped, labels added.
+- Kinds in this order:
+  1. 1-minute whole-chain quotes, regular hours. 5-, 15- and 30-minute answers are read from them.
+  2. Contract and expiration lists.
+  3. 1-minute Greeks.
+  4. Daily data: the session-close Greeks snapshot, 15-minute OHLC and open interest.
+  5. 1-second data and ticks per contract, and `trade_quote`.
+  6. Index levels from Greeks.
+- Done when: the SPXW 0DTE chain for 2024-03-14 at 1 minute is fetched once, answered from the store the second time, and matches the probe (135,286 rows).
+
+**Phase 4: The API and `md.py`**
+- `GET /chain`, `/quotes`, `/bars`, `/calendar` and `/status`, then `/jobs`.
+- Arrow streamed a day at a time, each response's headers and body sent in one write, regular hours by default.
+- `md.py`, including a helper that joins bars to snapshots on `bar_end` = `ts`.
+- A systemd unit listening on the LAN only.
+- Done when: one existing study ported to `md.py` matches its cached version. The expected differences are where the rules changed: no 09:30:00 row in regular hours, and production data instead of staging.
+
+**Phase 5: Other sources.** Alpaca after its spike, then Alphanume, then events: EDGAR Item 2.02 filings, FRED release dates with a table of release times, and FOMC dates. `GET /events`.
+
+**Phase 6: Operations**
+- Backups to the TrueNAS `backups` share, once the share setup is ready.
+- The merge schedule, after the merge spike.
+- The freshness rule, after the date-completeness results.
+- The main backtest universe's fill as a job (about 90 hours).
+- The research repo's rule changes to "all data through `md.py`".
+
+**Spikes and when they're needed**
+- Merge sizes and grace period: before Phase 2's upkeep code.
+- Date completeness: before Phase 3's freshness rule. It's running now.
+- Alpaca: before Phase 5.
+- Expiring ETF options after 16:00, and when each ETF joined the 16:15 group: before the Phase 1 rules for those products are final.
 
 ## Later
 
@@ -246,7 +310,7 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 ## Open questions
 
-- **Alpaca spike:** what it returns over the 200 calls/min limit, its page size for bars, and whether a multi-symbol request saves calls. Not probed yet.
+- **Alpaca spike:** what it returns over the 200 calls/min limit, its page size for bars, whether a multi-symbol request saves calls, whether bars are labelled by start or end, whether daily bars include extended hours, and its corporate-actions endpoint. Not probed yet.
 - **The 09:30 row: decided (Trey, 2026-11-22).** Rows are stored as returned, and a snapshot belongs to the session whose (start, end] contains its time. So the 09:30:00 row is pre-open state and falls outside RTH, the close snapshot falls inside RTH, and RTH answers at 1 minute start at 09:31. That matches the bar join (the first RTH bar ends at 09:31). There is no special case for 09:30. The evidence (`spikes/session_questions.py`, 2026-11-22, production unless stated): the interval row at 09:30:00 is never a regular-session quote. The first regular-session tick comes at 09:30:00.0xx for SPY, QQQ and AAPL options and at 09:30:02–04 for SPXW, so the 09:30:00 row holds whatever came before. That is either an all-zero quote or the last quote from before the open: SPXW's last GTH quote from 09:15 (2024-03-14, 2024-06-12) or 09:25 (2026-11-19/20), or the last pre-market quote from 09:25 for equity options in 2026. From 2024-08-29 to 2025-09-15, GTH ends on an all-zero quote, and every root checked shows 0/0 at 09:30:00. Before the equity pre-market began, SPY, QQQ and AAPL show only 0/0 placeholders before 09:30. Production and staging agree except on 2024-03-14, where production's 1-minute row skipped the closing 0/0 tick that staging returned. On 2024-08-29 production returned the 0/0 too, so the tie-break between ticks sharing a millisecond isn't consistent. This is likely why client scripts start at 09:31.
 - **Resolutions in the store: decided (Trey, 2026-11-22).** 5-, 15- and 30-minute quote answers are read from stored 1-minute rows. 1-second and tick data are fetched per contract by default; a whole chain at 1 second only on explicit request. Ticks follow the RTH-only rule.
 - **Session semantics** (Trey, 2026-11-22: the service has to deal with them): sessions per product with dated rule changes, which trade date evening GTH belongs to, what a fetch unit's time window is, and what clients get by default. Trade date, from the exchanges (checked 2026-11-22): it rolls when the evening session opens, not at the regular close. Cboe: GTH trades from 20:15 to midnight take the next business day's trade date, trades after midnight take that day's, and curb trades (16:15–17:00) take the same trade date as the regular session before them. Before a Friday holiday, both Thursday evening and Sunday evening GTH take Monday's trade date. CME futures likewise roll the trade date at the evening open after the daily break. **Decided: fetch and return regular trading hours only, unless a request explicitly asks for another session (Trey, 2026-11-22).** RTH follows the exchange (Trey, 2026-11-22): it ends when the product's regular session ends, which is 16:15 for products that trade then, 16:00 for expiring PM-settled index options and single stocks, and 13:00 or 13:15 on half days, all from the calendar. So there is no separate `late` session. **Decided: trade dates follow the exchange (Trey, 2026-11-22).** A trade date starts when the evening session opens. Curb trades keep the regular session's trade date. Rows keep their real time: `ts` is ThetaData's date plus `ms_of_day` as one time-zone-aware timestamp (UTC inside, shown in ET), never bare clock time (Trey, 2026-11-22). `trade_date` and `session` are added as labels from the calendar, so a quote at 21:00 ET on 2024-03-14 keeps that `ts` and gets `trade_date` 2024-03-15, `session` `gth`. Fetch units and coverage stay on ThetaData's own date, since that's what its API takes. Still open: whether expiring ETF options trade after 16:00 (SPY 2024-03-15: 839 trades 16:00–16:15; SPY, QQQ and IWM 2026-11-20: quotes but at most 2 trades); when each ETF joined the 16:15 group.
