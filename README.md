@@ -2,7 +2,7 @@
 
 Trey's market-data service. It fetches data from every outside source once, keeps it in one store, and serves it to every client project through one HTTP API.
 
-**Status: design settled, build not started.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
+**Status: Phase 0 (skeleton) done 2026-11-22; Phase 1 (calendar) next.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
 
 ## Why
 
@@ -237,6 +237,8 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
 - A catalog Postgres instance of its own (not the `md-bench-tsdb` container, which stays as it is). A data directory on local NVMe, outside git.
 - An environment-file loader that never logs a secret. pytest.
 - Done when: the service starts, attaches an empty DuckLake catalog on the new Postgres (tables come in Phase 2), and `GET /status` answers.
+- **Done 2026-11-22.** Catalog: Postgres 17.12 in the `md-catalog` container (`deploy/catalog.compose.yml`, `127.0.0.1:55433`, database `md_catalog`, named volume `md-catalog-pg`). Data under `data/` in the repo (git-ignored) until Phase 4's systemd unit. Settings come from `.env`, overridden by non-empty process environment values. A relative `MD_DATA_DIR` is taken from the env file's directory. Values containing `$`, ` #` or a backslash are refused, because docker compose reads them differently. The password reaches DuckDB as a secret, so it isn't in the ATTACH string, and `/status` gives only an error's type, never its text. The service won't start if others have any access to `.env`. DuckDB runs in UTC: it's set when connecting, because a session `SET` doesn't carry over to cursors and the box's zone is America/Chicago.
+- Run: `docker compose -f deploy/catalog.compose.yml --env-file .env up -d`, then `uv run market-data` (port 8780) and `uv run pytest`.
 
 **Phase 1: The calendar.** It comes first because every label, unit and default depends on it.
 - Trading days and early closes from ThetaData's `calendar_year`, stored.

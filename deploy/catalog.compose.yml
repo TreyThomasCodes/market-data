@@ -1,0 +1,20 @@
+# The DuckLake catalog's own Postgres instance (README: Deployment). Not md-bench-tsdb.
+# Start: docker compose -f deploy/catalog.compose.yml --env-file .env up -d
+name: market-data
+services:
+  catalog:
+    image: postgres:17.12
+    container_name: md-catalog
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: market_data
+      POSTGRES_DB: md_catalog
+      # Read only when the volume is first created. To change the password later, run
+      # ALTER ROLE market_data PASSWORD '...' in the container, then update .env.
+      POSTGRES_PASSWORD: ${MD_CATALOG_PASSWORD:?set MD_CATALOG_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:55433:5432"   # local only: the service is the catalog's one client
+    volumes:
+      - md-catalog-pg:/var/lib/postgresql/data
+volumes:
+  md-catalog-pg:
