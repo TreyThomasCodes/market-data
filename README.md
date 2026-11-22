@@ -86,9 +86,29 @@ Clients need dates for earnings, economic releases and FOMC meetings.
 
 ## Fetching
 
-- **ThetaData** (checked 2026-10-21, `spikes/compare_library.py`, `spikes/slot_limit.py`):
-  - The official `thetadata` Python library returned the same columns, rows and values as the Theta Terminal for stock EOD, a Greeks EOD chain slice, expirations and a day's traded contracts. Only the formatting differs: timezone-aware timestamps and full floats. That check covered end-of-day endpoints only, so intraday quotes and Greeks have to be compared before the service relies on the library.
-  - A new login invalidates the previous one on the same account and environment. So the service makes one client and shares it across its threads, and nothing else logs in to production while it runs. Trey's terminal is on the staging environment and isn't disturbed.
+- **ThetaData** (checked 2026-10-21 and 2026-11-21; `spikes/compare_library.py`, `spikes/slot_limit.py`, `spikes/intraday_library.py`, `spikes/intraday_thetadatadx.py`):
+  - **Client: [ThetaDataDx](https://github.com/userFRM/ThetaDataDx), pinned to 0.9.0 (Trey, 2026-11-21).**
+    - It's an unofficial Rust client with Python bindings. Its authors are active on ThetaData's Discord and known to the owners, and it talks to the same servers as the official `thetadata` library.
+    - It's pinned because ThetaData doesn't make breaking changes on its side (it versions an endpoint or gates a change behind a query parameter), so the only thing that can break is ThetaDataDx's own Python interface between releases (13 since July 2026).
+    - It has a request pool sized to the account's 4-request limit, retries on `RESOURCE_EXHAUSTED`, and chunked streaming of large responses.
+    - Its real-time feed (one session per account, needs Standard) could serve live data later.
+    - Its flat files need Professional and cover only the last 7 days, so they're no use here.
+    - It returns times as `ms_of_day`, dates as integers (`20240314`) and right as `C`/`P`. The fetch layer converts them once, before storing.
+  - **Real data comes from production, not staging, on principle (Trey, 2026-11-21).**
+  - **Checks:**
+    - The official library matched the terminal on stock EOD, a Greeks EOD chain slice, expirations and a day's traded contracts (2026-10-21).
+    - On 2026-11-21, SPXW 0DTE on 2024-03-14 at 1-minute intervals (135,286 rows each for quotes and first-order Greeks):
+      - ThetaDataDx matched the official library row for row and value for value, apart from rounding. The only difference: the empty 09:30 underlying price is 0 in ThetaDataDx and NaN in the library.
+      - Production and staging differed only at 09:30:00, where staging gives zeros for all 346 contracts and production real quotes, and in one row at 09:48 (5075 call: ask 90.40 × 100 on staging against 90.50 × 17). Research results aren't affected: they take the first print as 09:31, never 09:30 (Trey).
+    - Speed, median of 3 pulls each:
+
+      | Pull | Terminal (staging) | ThetaDataDx, staging | ThetaDataDx, production | Official library, production |
+      |---|---|---|---|---|
+      | Quotes | 1.0 s | 0.8 s | 1.8 s | 3.5 s |
+      | First-order Greeks | 2.3 s | | 4.6 s | 5.0 s |
+
+      Most of the extra time on production comes before the first byte arrives. Both hostnames resolve to the same address, 45 ms away. So the environment sets most of the speed, and the client makes a smaller difference.
+  - A new login invalidates the previous one on the same account and environment. So the service makes one client and shares it across its threads, and nothing else logs in to production while it runs. Trey's terminal is on the staging environment and isn't disturbed. A ThetaDataDx login to staging on 2026-11-21 didn't disturb the terminal either.
   - Over the limit fails at once with `RESOURCE_EXHAUSTED`; nothing queues on ThetaData's side. The service holds itself to 4 and treats `RESOURCE_EXHAUSTED` as "retry shortly", not as an outage.
   - Date ranges are split into ThetaData's 365-day maximum. `symbol=*` isn't allowed, and `expiration=*` goes one day per call.
 - **Two priorities.** Interactive requests (a client waiting) and bulk jobs. Bulk uses at most 3 of the 4 ThetaData slots, so a 25-hour job never locks out a quick lookup.
@@ -166,5 +186,4 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 ## Open questions
 
 - **Backups:** of the catalog, and of the never-delete stock EOD at least. Everything else can be refetched.
-- **The `thetadata` library on intraday endpoints:** compare it with the terminal before relying on it; otherwise keep the terminal.
 - **Merge schedule and grace period**, and why merged months came out about 1.6 times bigger than bulk-loaded ones in the benchmark (56 MB against 33–37 MB).
