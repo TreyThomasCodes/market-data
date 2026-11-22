@@ -77,8 +77,8 @@ Clients need dates for earnings, economic releases and FOMC meetings.
 
 | Event | Source | Probed 2026-11-21 |
 |---|---|---|
-| Earnings dates and time of day | SEC EDGAR: 8-K filings with Item 2.02, from `data.sec.gov/submissions/CIK##########.json` (`items`, `acceptanceDateTime`) | Free, no key. Times match the releases: Apple's at 16:30 ET (after the close) back to 2015; Delta's 39 and JPMorgan's at about 06:30 ET (before the open). The recent list holds about 1,000 filings, so heavy filers need the older batch files listed with it. `www.sec.gov`, which serves the ticker-to-CIK map and bulk files, returned 403 without a contact in the User-Agent, which SEC asks of automated clients. Item 2.02 also covers some non-earnings results (preliminary numbers, restatements). Alphanume `earnings-move-history` stays as a cross-check for the names it covers. |
-| Economic releases (CPI, payrolls, PCE, GDP, …) | ALFRED/FRED release dates (`fred/release/dates`) | Needs a free FRED API key, which isn't in `.env` yet. |
+| Earnings dates and time of day | SEC EDGAR: 8-K filings with Item 2.02, from `data.sec.gov/submissions/CIK##########.json` (`items`, `acceptanceDateTime`) | Free, no key. Times match the releases: Apple's at 16:30 ET (after the close) back to 2015; Delta's 39 and JPMorgan's at about 06:30 ET (before the open). The recent list holds about 1,000 filings, so heavy filers need the older batch files listed with it. `www.sec.gov`, which serves the ticker-to-CIK map and bulk files, returned 403 without a contact in the User-Agent. **No user details go to SEC for now (Trey, 2026-11-21):** use `data.sec.gov` only, with a generic User-Agent, and keep the ticker-to-CIK map for the names we need by hand or from another source. Item 2.02 also covers some non-earnings results (preliminary numbers, restatements). Alphanume `earnings-move-history` stays as a cross-check for the names it covers. |
+| Economic releases (CPI, payrolls, PCE, GDP, …) | ALFRED/FRED release dates (`fred/release/dates`) | `FRED_API_KEY` in `.env`, checked 2026-11-21: CPI has 951 release dates back to 1949, payrolls 865, GDP 858, PPI 602, personal income/PCE 741. With `include_release_dates_with_no_data=true` the list also gives scheduled dates ahead (next CPI 2026-12-10). Dates only, no time of day: the time comes from a fixed table per release (CPI, payrolls, PPI at 08:30 ET, and so on). |
 | FOMC meetings | The Fed's calendar pages | Free. The current page lists 2021–2027 (57 meetings parsed; `*` marks a projections meeting). Earlier years are one page each (`fomchistorical<year>.htm`) in a looser format that also lists unscheduled meetings and calls. |
 | Dividends, splits, lock-ups, spin-offs | Alphanume (`dividend-capture`, `reverse-splits`, `lockup-expirations`, `spinoffs`); Alpaca corporate actions | In hand; Alpaca's not probed. |
 
@@ -165,7 +165,6 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 ## Open questions
 
-- **Event sources:** a FRED API key for economic releases, and what contact to give SEC in the User-Agent for `www.sec.gov` (ticker map, bulk files).
 - **Catalog Postgres:** a new instance on the main box, or a database on the existing Timescale instance. Local was measured; a LAN round trip adds to every query.
 - **Backups:** of the catalog, and of the never-delete stock EOD at least. Everything else can be refetched.
 - **The `thetadata` library on intraday endpoints:** compare it with the terminal before relying on it; otherwise keep the terminal.
