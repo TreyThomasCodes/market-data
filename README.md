@@ -236,7 +236,7 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
 - uv project with exact pins: DuckDB 2.0.1, DuckLake catalog format 1.1, ThetaDataDx (`thetadatadx-py`) 0.9.0, Polars, Starlette, uvicorn, psycopg.
 - A catalog Postgres instance of its own (not the `md-bench-tsdb` container, which stays as it is). A data directory on local NVMe, outside git.
 - An environment-file loader that never logs a secret. pytest.
-- Done when: the service starts, attaches the store, and `GET /status` answers.
+- Done when: the service starts, attaches an empty DuckLake catalog on the new Postgres (tables come in Phase 2), and `GET /status` answers.
 
 **Phase 1: The calendar.** It comes first because every label, unit and default depends on it.
 - Trading days and early closes from ThetaData's `calendar_year`, stored.
@@ -288,7 +288,7 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
 
 **Spikes and when they're needed**
 - Merge sizes and grace period: before Phase 2's upkeep code.
-- Date completeness: before Phase 3's freshness rule. It's running now.
+- Date completeness: before Phase 6's freshness rule. It's running now.
 - Alpaca: before Phase 5.
 - Expiring ETF options after 16:00, and when each ETF joined the 16:15 group: before the Phase 1 rules for those products are final.
 
