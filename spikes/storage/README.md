@@ -6,3 +6,4 @@ Scripts behind "Why DuckLake" in the top README. Data: 2,218 days of SPXW one-mi
 - `bench.py`: single-client query timings. `conc.py`: 1–32 concurrent readers.
 - `rw.py`: reads while writing (plain Parquet, DuckLake with SQLite or Postgres catalog, TimescaleDB), checking every answer.
 - `server.py`, `apibench.py`, `conc_api.py`: the HTTP and Arrow API against direct DuckDB.
+- `session_labels.py`: `trade_date` and `session` stored on every row against joined from a sessions table at read time (2026-11-22).
