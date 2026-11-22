@@ -10,7 +10,7 @@ Trey's market-data service. It fetches data from every outside source once, keep
 - **One place keeps to ThetaData's 4-request limit.** Each client process holds itself to 4, so two scripts running at once can send 8.
 - **One answer to the questions every script re-solves.** Several research scripts each rebuild SPX from option `underlying_price`, find the settlement print (16:05, 13:05 on half days), load a chain at a time, and list trading days.
 - **More sources than ThetaData.** Alpaca's free SIP bars, Alphanume's datasets, earnings and economic-release dates now, and later NT8 exports, Databento and breadth data.
-- **Fast questions across all of it.** "Every 0DTE chain at one minute of the day since 2022" is one query.
+- **Fast questions across all of it.** "Every 0DTE chain at one minute of the day since 2022" is one typed call.
 
 What it doesn't change: the first fetch is still limited by each source's speed. The main backtest universe takes roughly 90 hours to fill once (measured on a sample 2026-11-22, see Time semantics).
 
@@ -26,7 +26,7 @@ What it doesn't change: the first fetch is still limited by each source's speed.
 
 ```
 clients (research scripts via md.py, other clients)
-   │  HTTP only: typed calls, read-only SQL, jobs, status.  Results as Arrow (zstd when large)
+   │  HTTP only: typed calls, jobs, status.  Results as Arrow (zstd when large)
    ▼
 market-data service  (Python, systemd, on the main box)
    │  answers from the store; fetches what's missing first
@@ -53,7 +53,6 @@ The service is the only writer. The one exception is reading a Parquet file by h
 | Option daily | ThetaData first-order Greeks at each product's session close, 15-minute `option/history/ohlc`, `open_interest` | (root, expiration, trade date) | No EOD endpoints (see Time semantics). Trade bars drop empty bars. |
 | Contract and expiration lists | ThetaData `option/list/*` | (root or all, trade date) | Small. Lists for past dates are kept; lists for today refetch. |
 | Stock bars | Alpaca SIP, minute and daily | (symbol, interval, month) | 2016-01-04 on, 04:00–20:00. Raw prices stored; split and dividend adjustment applied when read. Zero-volume bars Alpaca fills in after a move to OTC are dropped. |
-| Stock end of day | ThetaData `stock/history/eod` (Free) | (symbol, year) | Free only within a rolling window (about 2023-06 on). The research repo's saved backfill can't be fetched again: it's imported first and marked never-delete. |
 | Index levels | Built from option `underlying_price` | (root, trade date, interval) | Index endpoints return 403 on Trey's tier. SPX at 1 s comes from one near-the-money SPXW contract's Greeks. A `source` column says which contract it came from. |
 | Alphanume datasets | Alphanume API | (dataset, query) | Stored as returned. Recent rows keep changing (outcomes, lifecycle columns), so rows less than a set age refetch. |
 | Events | To be chosen (see [Events](#events)) | (kind, date range) | Earnings dates with time of day, economic releases, FOMC. |
@@ -67,7 +66,6 @@ The service is the only writer. The one exception is reading a Parquet file by h
 - **Today isn't stored.** Requests for a date whose data isn't complete yet pass through uncached. When a date counts as complete is open (see Open questions).
 - **Recent Alphanume rows** refetch once older than a set age.
 - **Kept forever:** past dates of everything else.
-- **Never deleted:** the ThetaData stock EOD that has aged out of the free window.
 
 **Store layout.** One DuckLake table per kind above, partitioned by year and month of the trade date, sorted inside each file by root, expiration, strike, right and time. New units land as small files. A merge rewrites each touched month into one file, and files are deleted only after a grace period longer than the longest query, so a running query never loses one.
 
@@ -174,20 +172,20 @@ Clients need dates for earnings, economic releases and FOMC meetings.
 
 ## Interface
 
-1. **Typed calls** for what the scripts do most:
+1. **Typed calls** for what the scripts do most. They take date ranges, time-of-day and session filters (RTH unless asked), and expiration and strike filters, and they stream results a day at a time, so a long range never has to fit in memory. Clients aggregate in Polars.
    - `GET /chain`: root, date, time or time range, optional expirations and strikes
    - `GET /quotes`: one contract, a range
    - `GET /bars`: symbol, interval, range, adjustment. Picks the source by rule (Alpaca for stocks, the option-derived series for indexes) and returns a `source` column. Any call can force a source.
    - `GET /events`: kind, date range, symbols
    - `GET /calendar`: sessions in a range
-2. **Read-only SQL:** `POST /sql` runs DuckDB SQL against the store and returns only the result. A backtest sends its query, not a request for raw rows: "average 0DTE spread by minute over 1,100 days" comes back as 265 rows. The service first fills any units the query's date range needs, then runs it.
+2. **No SQL endpoint (Trey, 2026-11-22).** SQL against the tables would tie clients to the table layout, which is exactly what the API exists to prevent, and it would need its own scope and lockdown machinery. If a measured workload is too slow through typed calls, it gets its own typed endpoint.
 3. **No ThetaData-compatible paths (Trey, 2026-11-22): a clean break.** existing clients and old scripts move to the typed calls and `md.py`; nothing mimics the terminal's URLs or CSV columns.
 4. **Jobs:** `POST /jobs` with a list of requests to prefetch, `GET /jobs/<id>` for progress. A job runs on the server, so it survives a client disconnecting. The main backtest universe fetch is one job.
 5. **Status:** `GET /status` shows queue depth per source, ThetaData slots in use, store and catalog health, and last merge.
 
 **Results** are Arrow streams, zstd-compressed above a size threshold. Polars and pandas load them without converting. Errors are JSON.
 
-**`md.py`**, a thin Python client, is the only client library: `md.chain("SPXW", "2024-03-14", "12:00")`, `md.sql("...")`, `md.bars("AAPL", "1m", start, end)`, each returning a Polars frame. Scripts don't know what's behind the API, so the store can change without touching them.
+**`md.py`**, a thin Python client, is the only client library: `md.chain("SPXW", "2024-03-14", "12:00")`, `md.bars("AAPL", "1m", start, end)`, each returning a Polars frame. Scripts don't know what's behind the API, so the store can change without touching them.
 
 ## Why DuckLake
 
@@ -203,7 +201,7 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 - Plain Parquet without a catalog gave errors and double-counted a day while files were being merged, so it isn't an option.
 - DuckLake's catalog in SQLite stalled lookups to about 0.5 s during writes; in Postgres it didn't.
-- The HTTP and Arrow API cost nothing measurable on lookups and sweeps, and with 8 clients was faster than 8 direct readers (387 against 264 lookups a second). Raw pulls of millions of rows cost more (6.7M rows: 124 ms direct, 392 ms through the API with zstd), which is why backtests should send their SQL.
+- The HTTP and Arrow API cost nothing measurable on lookups and sweeps, and with 8 clients was faster than 8 direct readers (387 against 264 lookups a second). Raw pulls of millions of rows cost more (6.7M rows: 124 ms direct, 392 ms through the API with zstd), so typed calls stream by day and clients process each piece as it arrives.
 - **The trade-off:** single lookups are slower than TimescaleDB's, because each query first asks the catalog for its files. If that ever matters, the service can keep the live file list in memory and read the right file directly (about 3 ms in the test).
 - **Two traps to avoid in the build:**
   - Send each HTTP response's headers and body in one write, or kept-alive connections wait about 40 ms on the delayed-ACK timer.
@@ -214,7 +212,7 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 - **The research repo's ThetaData cache** (6.8 GB, 77,889 files):
   - Import whole-session files as units.
   - Partial windows (single-minute snapshots, half sessions) don't make a full unit and aren't imported; they refetch on demand.
-  - **The stock EOD backfill is imported first, counted against the files, and marked never-delete** before anything in the research repo's cache is touched. Those files stay until Trey says otherwise.
+  - **ThetaData stock EOD isn't used, and the research repo's backfill (35,037 files) isn't imported (Trey, 2026-11-22).** Stock daily figures come from Alpaca bars by trade date and session. The free tier refuses dates before 2023-06-01 ("requiring a VALUE subscription", checked 2026-11-22). Those files stay where they are.
 - **The research repo's Alphanume downloads:** imported as stored queries.
 - **Research scripts keep their own caches until moved.** Finished backtests aren't rewritten. New work uses `md.py`. When the service is live, the research repo's ThetaData rule changes to "all data through `md.py`".
 - **Other clients' stores:** left alone for now.
@@ -238,24 +236,22 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 - Evidence hashing, manifests, request fingerprints, provenance graphs and version history.
 - User accounts and anything public.
 - Writes from clients.
+- A SQL endpoint (Trey, 2026-11-22).
 
 ## Open questions
 
 - **Alpaca spike:** what it returns over the 200 calls/min limit, its page size for bars, and whether a multi-symbol request saves calls. Not probed yet.
-- **The 09:30 row:** what to do with it is Trey's call; the evidence (`spikes/session_questions.py`, 2026-11-22, production unless stated): the interval row at 09:30:00 is never a regular-session quote. The first regular-session tick comes at 09:30:00.0xx for SPY, QQQ and AAPL options and at 09:30:02–04 for SPXW, so the 09:30:00 row holds whatever came before. That is either an all-zero quote or the last quote from before the open: SPXW's last GTH quote from 09:15 (2024-03-14, 2024-06-12) or 09:25 (2026-11-19/20), or the last pre-market quote from 09:25 for equity options in 2026. From 2024-08-29 to 2025-09-15, GTH ends on an all-zero quote, and every root checked shows 0/0 at 09:30:00. Before the equity pre-market began, SPY, QQQ and AAPL show only 0/0 placeholders before 09:30. Production and staging agree except on 2024-03-14, where production's 1-minute row skipped the closing 0/0 tick that staging returned. On 2024-08-29 production returned the 0/0 too, so the tie-break between ticks sharing a millisecond isn't consistent. This is likely why client scripts start at 09:31.
-- **Resolutions in the store** (probed 2026-11-22, see ThetaData checks): whether coarser intervals are read from 1-minute rows; whether 1-second and tick units are per contract, per chain or both; what time window ticks are fetched for (the default 09:30–16:00 leaves out GTH, 16:00–16:15 and the curb; see Session semantics); and how the order of ticks sharing a millisecond is kept.
+- **The 09:30 row: decided (Trey, 2026-11-22).** Rows are stored as returned, and a snapshot belongs to the session whose (start, end] contains its time. So the 09:30:00 row is pre-open state and falls outside RTH, the close snapshot falls inside RTH, and RTH answers at 1 minute start at 09:31. That matches the bar join (the first RTH bar ends at 09:31). There is no special case for 09:30. The evidence (`spikes/session_questions.py`, 2026-11-22, production unless stated): the interval row at 09:30:00 is never a regular-session quote. The first regular-session tick comes at 09:30:00.0xx for SPY, QQQ and AAPL options and at 09:30:02–04 for SPXW, so the 09:30:00 row holds whatever came before. That is either an all-zero quote or the last quote from before the open: SPXW's last GTH quote from 09:15 (2024-03-14, 2024-06-12) or 09:25 (2026-11-19/20), or the last pre-market quote from 09:25 for equity options in 2026. From 2024-08-29 to 2025-09-15, GTH ends on an all-zero quote, and every root checked shows 0/0 at 09:30:00. Before the equity pre-market began, SPY, QQQ and AAPL show only 0/0 placeholders before 09:30. Production and staging agree except on 2024-03-14, where production's 1-minute row skipped the closing 0/0 tick that staging returned. On 2024-08-29 production returned the 0/0 too, so the tie-break between ticks sharing a millisecond isn't consistent. This is likely why client scripts start at 09:31.
+- **Resolutions in the store: decided (Trey, 2026-11-22).** 5-, 15- and 30-minute quote answers are read from stored 1-minute rows. 1-second and tick data are fetched per contract by default; a whole chain at 1 second only on explicit request. Ticks follow the RTH-only rule.
 - **Session semantics** (Trey, 2026-11-22: the service has to deal with them): sessions per product with dated rule changes, which trade date evening GTH belongs to, what a fetch unit's time window is, and what clients get by default. Trade date, from the exchanges (checked 2026-11-22): it rolls when the evening session opens, not at the regular close. Cboe: GTH trades from 20:15 to midnight take the next business day's trade date, trades after midnight take that day's, and curb trades (16:15–17:00) take the same trade date as the regular session before them. Before a Friday holiday, both Thursday evening and Sunday evening GTH take Monday's trade date. CME futures likewise roll the trade date at the evening open after the daily break. **Decided: fetch and return regular trading hours only, unless a request explicitly asks for another session (Trey, 2026-11-22).** RTH follows the exchange (Trey, 2026-11-22): it ends when the product's regular session ends, which is 16:15 for products that trade then, 16:00 for expiring PM-settled index options and single stocks, and 13:00 or 13:15 on half days, all from the calendar. So there is no separate `late` session. **Decided: trade dates follow the exchange (Trey, 2026-11-22).** A trade date starts when the evening session opens. Curb trades keep the regular session's trade date. Rows keep their real time: `ts` is ThetaData's date plus `ms_of_day` as one time-zone-aware timestamp (UTC inside, shown in ET), never bare clock time (Trey, 2026-11-22). `trade_date` and `session` are added as labels from the calendar, so a quote at 21:00 ET on 2024-03-14 keeps that `ts` and gets `trade_date` 2024-03-15, `session` `gth`. Fetch units and coverage stay on ThetaData's own date, since that's what its API takes. Still open: whether expiring ETF options trade after 16:00 (SPY 2024-03-15: 839 trades 16:00–16:15; SPY, QQQ and IWM 2026-11-20: quotes but at most 2 trades); when each ETF joined the 16:15 group; holiday-eve evening sessions, such as after 2024-12-24.
 - **Where `trade_date` and `session` come from:** stored on every row at fetch time (fast reads; a calendar correction means rewriting data) or joined from the sessions table at read time (corrections are free; the join cost isn't benchmarked yet).
-- **Proposals, not yet agreed (2026-11-22):**
-  - Coverage and data in step: commit the coverage row in the same DuckLake transaction as the data, or write data first and make refetching a unit safe to repeat.
-  - Single fetch: two requests that need the same missing unit share one fetch.
-  - `/sql` scope: the caller states what the query covers (root, kind, dates, sessions) next to the SQL, rather than the service parsing it.
-  - `/sql` lockdown: DuckDB external access off and configuration locked, so a query sees only the store.
-  - Tick order: a sequence column added at fetch time, since ticks share milliseconds and quote ticks carry no sequence number.
-  - Large responses: use ThetaDataDx's streaming above its ~100 MB warning.
-  - Web framework: Starlette on uvicorn, with each response's headers and body sent in one write.
+- **Build proposals (Trey, 2026-11-22):**
+  - **Accepted:** coverage committed in the same DuckLake transaction as the data, so the two can't disagree after a crash.
+  - **Accepted:** single fetch. Two requests that need the same missing unit share one fetch.
+  - **Accepted:** a `seq` column on quote ticks, numbering them per contract and day in the order ThetaData returns them. ThetaData support (Discord, 2026-08-17): "the quotes are listed in the order they are received. No sequence number is available for the quote." Up to 16 share a millisecond, and ThetaData's own snapshots follow that order, so it has to survive sorting and merges. Trades carry OPRA's `sequence` already.
+  - **Accepted:** ThetaDataDx's streaming interface above its ~100 MB warning.
+  - **Accepted:** Starlette on uvicorn, with each response's headers and body sent in one write.
 - **When a date is complete:** with no EOD report to wait for, the service needs its own rule. ThetaData files the evening GTH session under the calendar date until 23:59, and its docs say "data from the previous day isn't available from 00:00 ET to 01:45 ET".
-- **Stock end of day:** the no-EOD decision was about option endpoints. ThetaData's `stock/history/eod` (Free) has an unprobed window. Alpaca's daily bars (2016 on) may make it unnecessary, apart from the never-delete backfill. Trey's call.
 - **The research repo's cached Greeks EOD** (3,007 files) no longer matches any unit, so it isn't imported. It stays in the research repo for finished work.
-- **Backups:** of the catalog, and of the never-delete stock EOD at least. Everything else can be refetched.
+- **Backups: decided (Trey, 2026-11-22).** A nightly `pg_dump` of the catalog plus a weekly copy of the Parquet directory to another disk or network storage. Where to is still to choose.
 - **Merge schedule and grace period**, and why merged months came out about 1.6 times bigger than bulk-loaded ones in the benchmark (56 MB against 33–37 MB).
