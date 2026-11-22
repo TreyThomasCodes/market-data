@@ -215,10 +215,7 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 ## Moving existing data in
 
-- **The research repo's ThetaData cache** (6.8 GB, 77,889 files). **Open (2026-11-22):** These were fetched through Trey's terminal, which runs on staging, and the service takes real data from production only (Trey, 2026-11-21). Staging and production differ in places (the 09:30 row on 2024-03-14, one row at 09:48). The options are to import nothing and refetch from production, or to import with the source environment recorded. If imported:
-  - Import whole-session files as units.
-  - Partial windows (single-minute snapshots, half sessions) don't make a full unit and aren't imported; they refetch on demand.
-  - **ThetaData stock EOD isn't used, and the research repo's backfill (35,037 files) isn't imported (Trey, 2026-11-22).** Stock daily figures come from Alpaca bars by trade date and session. The free tier refuses dates before 2023-06-01 ("requiring a VALUE subscription", checked 2026-11-22). Those files stay where they are.
+- **The research repo's ThetaData cache isn't imported (Trey, 2026-11-22).** It was fetched (6.8 GB, 77,889 files) through Trey's terminal, which runs on staging, and the service takes real data from production only (Trey, 2026-11-21). Staging and production differ in places (the 09:30 row on 2024-03-14, one row at 09:48). Everything is refetched from production as requested. That includes the stock EOD backfill (35,037 files) and the Greeks EOD files (3,007), which the service wouldn't use anyway (see Time semantics); the free stock tier refuses dates before 2023-06-01 ("requiring a VALUE subscription", checked 2026-11-22). Those files stay where they are, for finished work.
 - **The research repo's Alphanume downloads:** imported as stored queries.
 - **Research scripts keep their own caches until moved.** Finished backtests aren't rewritten. New work uses `md.py`. When the service is live, the research repo's ThetaData rule changes to "all data through `md.py`".
 - **Other clients' stores:** left alone for now.
@@ -322,6 +319,5 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
   - **Accepted:** ThetaDataDx's streaming interface above its ~100 MB warning.
   - **Accepted:** Starlette on uvicorn, with each response's headers and body sent in one write.
 - **When a date is complete:** with no EOD report to wait for, the service needs its own rule. Being measured: `spikes/date_completeness.py` watches trade date 2026-11-23 at 18 checks from 10:30 ET that day to 09:00 ET on 2026-11-25 (row counts, last timestamps, checksums, errors). ThetaData files the evening GTH session under the calendar date until 23:59, and its docs say "data from the previous day isn't available from 00:00 ET to 01:45 ET".
-- **The research repo's cached Greeks EOD** (3,007 files) no longer matches any unit, so it isn't imported. It stays in the research repo for finished work.
 - **Backups: decided (Trey, 2026-11-22).** A nightly `pg_dump` of the catalog plus a weekly copy of the Parquet directory to the `backups` share on Trey's TrueNAS server (Trey, 2026-11-22; not mounted on this box yet). How the service authenticates waits until TrueNAS's share setup changes, which Trey plans.
 - **Merge schedule and grace period**, and why merged months came out about 1.6 times bigger than bulk-loaded ones in the benchmark (56 MB against 33–37 MB).
