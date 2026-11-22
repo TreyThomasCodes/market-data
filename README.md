@@ -108,6 +108,30 @@ Clients need dates for earnings, economic releases and FOMC meetings.
       | First-order Greeks | 2.3 s | | 4.6 s | 5.0 s |
 
       Most of the extra time on production comes before the first byte arrives. Both hostnames resolve to the same address, 45 ms away. So the environment sets most of the speed, and the client makes a smaller difference.
+    - **Resolutions, 2026-11-22** (`spikes/resolution_ladder.py`, `spikes/resolution_open.py`; SPXW 0DTE on 2024-03-14, production, one request at a time). Findings only, nothing decided yet:
+
+      | Pull | Fetch | Rows | Parquet |
+      |---|---|---|---|
+      | Whole chain, 5 min | 2.2 s | 27,334 | 0.1 MB |
+      | Whole chain, 1 min | 2.2 s | 135,286 | 0.5 MB |
+      | Whole chain, 1 s | 107 s | 8,096,746 | 38.5 MB |
+      | One contract (5145 C), 1 s | 1.1 s | 23,401 | 0.2 MB |
+      | One contract, tick quotes (09:30–16:00) | 2.8 s | 1,379,066 | 6.0 MB |
+      | One contract, `trade_quote` | 0.4 s | 14,846 | 0.3 MB |
+
+      - 5-minute rows equal the 1-minute rows at the same timestamps, on every column, for all 27,334 rows.
+      - 1-minute rows equal the 1-second rows at the same timestamps everywhere except 09:30:00, where all 346 contracts differ (below).
+      - A 1-second row equals the last tick at or before that second (`<=`, taking the last of ticks sharing a millisecond in the order returned) for every second of the contract's day. With `<` instead, 1,010 seconds differ.
+      - The 1-second contract pull equals that contract's rows in the 1-second chain pull.
+      - Ticks share milliseconds: 238,899 milliseconds hold more than one tick (up to 16), and quote ticks carry no sequence number, so the order returned is the only order.
+      - Quote pulls default to 09:30–16:00. Ticks for this contract run from 04:00:00 to 09:15:00.386, where the last real quote (27 × 31.80 / 9 × 32.80) is followed in the same millisecond by an all-zero quote. Nothing comes until 09:30:03.890.
+    - **Session windows, 2026-11-22** (`spikes/session_windows.py`; one near-the-money call per case, tick quotes and `trade_quote` over 00:00–23:59:59, production). Findings only:
+      - **SPXW GTH** quotes and trades come back under the calendar date they happen on, not the trade date Cboe assigns them to. Trade date 2024-03-14 holds 00:00–09:15:00.764 and also 20:15:00.152–23:59:58.716 (the next session). ThetaData's docs say GTH runs 20:15 to 09:25 next day, and the end moved from 09:15 to 09:25 "effective trade date Monday, August 26, 2024 (starting hours of operation for Sunday night session, August 25, 2024)". The data agrees: last GTH tick 09:15:00.764 on 2024-03-14, and 09:25:00.2xx on 2026-11-19/20. The docs also say "After January 2022, Theta Data has full GTH / ETH coverage".
+      - **SPXW after 16:00:** a non-expiring contract has quotes and trades 16:00–16:15 and quotes (2026: also trades) 16:15–17:00, the curb. An expiring contract stops at 16:00 on both dates checked.
+      - **SPY options** run to 16:15, including on expiration day (2024-03-15: 839 trades 16:00–16:15). In 2024 the only pre-09:30 quotes are 0/0 placeholders, 08:00–09:25. By 2026-11-19 there are real quotes and trades from 07:30. Cboe's notices for the C1 pre-market session for equity options gave July 13, 2026, then a "TBD" August 2026 date; the go-live date isn't confirmed.
+      - Zero quotes (0/0) appear at session edges: SPXW at the 09:15 GTH end and the curb, SPY pre-market. ThetaData's docs: "OPRA sends quotes with zero bid and or asks during premarket."
+      - ThetaDataDx's history calls default to 09:30–16:00, so a default pull leaves out 16:00–16:15 for SPXW and SPY as well as every extended session.
+      - ThetaDataDx logs a warning above about 100 MB of response (the 1-second chain and the contract's ticks) and suggests `.stream(handler)`.
   - A new login invalidates the previous one on the same account and environment. So the service makes one client and shares it across its threads, and nothing else logs in to production while it runs. Trey's terminal is on the staging environment and isn't disturbed. A ThetaDataDx login to staging on 2026-11-21 didn't disturb the terminal either.
   - Over the limit fails at once with `RESOURCE_EXHAUSTED`; nothing queues on ThetaData's side. The service holds itself to 4 and treats `RESOURCE_EXHAUSTED` as "retry shortly", not as an outage.
   - Date ranges are split into ThetaData's 365-day maximum. `symbol=*` isn't allowed, and `expiration=*` goes one day per call.
@@ -188,6 +212,17 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 - **Theta-compatible `/v3` paths:** whether the service offers them at all (Trey, 2026-11-22: not settled).
 - **Alpaca spike:** what it returns over the 200 calls/min limit, its page size for bars, and whether a multi-symbol request saves calls. Not probed yet.
-- **The 09:30 row:** staging gives zero quotes at 09:30:00 and ThetaDataDx gives a 0 underlying price there. Work out what ThetaData actually returns at the open, across days and environments, before any first-print rule (Trey, 2026-11-22).
+- **The 09:30 row:** staging gives zero quotes at 09:30:00 and ThetaDataDx gives a 0 underlying price there. Work out what ThetaData actually returns at the open, across days and environments, before any first-print rule (Trey, 2026-11-22). Found so far, one day and one contract (2026-11-22): on production, the 1- and 5-minute 09:30:00 rows hold the last quote before 09:15:00.386, and the 1-second rows hold the all-zero quote that follows it in the same millisecond, from 09:15 until the first real quote at 09:30:03.890. So the 1-minute 09:30 row looks like a 15-minute-old quote, and the zeros look like a cleared book. The quotes before 09:15 are Cboe GTH (see Session semantics), so the 09:30 interval row carries the last GTH quote over the gap; since 2024-08-26 GTH ends at 09:25, so on later dates that quote should be about 5 minutes old (not yet checked). Still to check: other days, roots and staging.
+- **Resolutions in the store** (probed 2026-11-22, see ThetaData checks): whether coarser intervals are read from 1-minute rows; whether 1-second and tick units are per contract, per chain or both; what time window ticks are fetched for (the default 09:30–16:00 leaves out GTH, 16:00–16:15 and the curb; see Session semantics); and how the order of ticks sharing a millisecond is kept.
+- **Session semantics** (Trey, 2026-11-22: the service has to deal with them): sessions per product with dated rule changes, which trade date evening GTH belongs to, what a fetch unit's time window is, and what clients get by default. Trade date, from the exchanges (checked 2026-11-22): it rolls when the evening session opens, not at the regular close. Cboe: GTH trades from 20:15 to midnight take the next business day's trade date, trades after midnight take that day's, and curb trades (16:15–17:00) take the same trade date as the regular session before them. Before a Friday holiday, both Thursday evening and Sunday evening GTH take Monday's trade date. CME futures likewise roll the trade date at the evening open after the daily break. **Decided: trade dates follow the exchange (Trey, 2026-11-22).** A trade date starts when the evening session opens. Curb trades keep the regular session's trade date. Rows keep their real time: `ts` is ThetaData's date plus `ms_of_day` as one time-zone-aware timestamp (UTC inside, shown in ET), never bare clock time (Trey, 2026-11-22). `trade_date` and `session` are added as labels from the calendar, so a quote at 21:00 ET on 2024-03-14 keeps that `ts` and gets `trade_date` 2024-03-15, `session` `gth`. Fetch units and coverage stay on ThetaData's own date, since that's what its API takes. Still to verify: Sunday-evening GTH under ThetaData's dates; GTH coverage before 2022; the go-live date of equity-option pre-market; which roots and ETFs run to 16:15; half-day hours for each.
+- **Where `trade_date` and `session` come from:** stored on every row at fetch time (fast reads; a calendar correction means rewriting data) or joined from the sessions table at read time (corrections are free; the join cost isn't benchmarked yet).
+- **Proposals, not yet agreed (2026-11-22):**
+  - Coverage and data in step: commit the coverage row in the same DuckLake transaction as the data, or write data first and make refetching a unit safe to repeat.
+  - Single fetch: two requests that need the same missing unit share one fetch.
+  - `/sql` scope: the caller states what the query covers (root, kind, dates, sessions) next to the SQL, rather than the service parsing it.
+  - `/sql` lockdown: DuckDB external access off and configuration locked, so a query sees only the store.
+  - Tick order: a sequence column added at fetch time, since ticks share milliseconds and quote ticks carry no sequence number.
+  - Large responses: use ThetaDataDx's streaming above its ~100 MB warning.
+  - Web framework: Starlette on uvicorn, with each response's headers and body sent in one write.
 - **Backups:** of the catalog, and of the never-delete stock EOD at least. Everything else can be refetched.
 - **Merge schedule and grace period**, and why merged months came out about 1.6 times bigger than bulk-loaded ones in the benchmark (56 MB against 33–37 MB).
