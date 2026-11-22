@@ -16,7 +16,7 @@ What it doesn't change: the first fetch is still limited by each source's speed.
 
 ## Decisions (Trey, 2026-11-21)
 
-1. **Store:** DuckLake, with its catalog in Postgres. Measured against TimescaleDB, see [Why DuckLake](#why-ducklake).
+1. **Store:** DuckLake, with its catalog in a Postgres instance of its own on the main box, not a database on the existing Timescale instance. Measured against TimescaleDB, see [Why DuckLake](#why-ducklake).
 2. **Repo:** this one, separate from the research repo, because other clients use it too.
 3. **Host:** straight on Trey's main box for now (16 cores, 125 GB RAM, local NVMe), where the research repo's backtests already run. Queries run inside the service, so it needs real cores.
 4. **Live data** (IBKR quotes for live trading) comes later. Results keep the same shapes, so adding live data doesn't change callers.
@@ -147,7 +147,7 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 - **Service:** Python, under systemd as its own user on the main box. Listens on the LAN only.
 - **Data:** Parquet under a data directory on local NVMe (git-ignored). Not on network storage, which slows every sweep.
-- **Catalog:** Postgres on the same box, so each query's catalog round trip stays local.
+- **Catalog:** its own Postgres instance on the same box (Trey, 2026-11-21), so each query's catalog round trip stays local.
 - **Secrets:** `THETADATA_API_KEY`, the Alpaca and Alphanume keys, and event-source keys go in an environment file readable only by the service user. Never in the repo, never in logs.
 - **Upkeep:** merges, snapshot expiry and file cleanup run on a schedule in the service.
 
@@ -165,7 +165,6 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 ## Open questions
 
-- **Catalog Postgres:** a new instance on the main box, or a database on the existing Timescale instance. Local was measured; a LAN round trip adds to every query.
 - **Backups:** of the catalog, and of the never-delete stock EOD at least. Everything else can be refetched.
 - **The `thetadata` library on intraday endpoints:** compare it with the terminal before relying on it; otherwise keep the terminal.
 - **Merge schedule and grace period**, and why merged months came out about 1.6 times bigger than bulk-loaded ones in the benchmark (56 MB against 33–37 MB).
