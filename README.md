@@ -99,7 +99,7 @@ Clients need dates for earnings, economic releases and FOMC meetings.
     - The official library matched the terminal on stock EOD, a Greeks EOD chain slice, expirations and a day's traded contracts (2026-10-21).
     - On 2026-11-21, SPXW 0DTE on 2024-03-14 at 1-minute intervals (135,286 rows each for quotes and first-order Greeks):
       - ThetaDataDx matched the official library row for row and value for value, apart from rounding. The only difference: the empty 09:30 underlying price is 0 in ThetaDataDx and NaN in the library.
-      - Production and staging differed only at 09:30:00, where staging gives zeros for all 346 contracts and production real quotes, and in one row at 09:48 (5075 call: ask 90.40 × 100 on staging against 90.50 × 17). Research results aren't affected: they take the first print as 09:31, never 09:30 (Trey).
+      - Production and staging differed only at 09:30:00, where staging gives zeros for all 346 contracts and production real quotes, and in one row at 09:48 (5075 call: ask 90.40 × 100 on staging against 90.50 × 17). The 09:30 row looks like a ThetaData quirk (client scripts start at 09:31 around it). It needs running out before any rule is set on it (Trey, 2026-11-22).
     - Speed, median of 3 pulls each:
 
       | Pull | Terminal (staging) | ThetaDataDx, staging | ThetaDataDx, production | Official library, production |
@@ -114,6 +114,7 @@ Clients need dates for earnings, economic releases and FOMC meetings.
 - **Two priorities.** Interactive requests (a client waiting) and bulk jobs. Bulk uses at most 3 of the 4 ThetaData slots, so a 25-hour job never locks out a quick lookup.
 - **Outages pause the queue.** When requests start failing together (timeouts, 5xx, connection errors), the queue stops, checks with one cheap request every minute or two, and resumes. Failed units go back on the queue, not into a failure list. On 2026-10-21 a client backfill without this logged 445 failures in one second while the terminal was down.
 - **Alpaca and Alphanume** each get their own queue under their own rate limits. Keys come from the service's environment file, never from requests.
+  - **Alpaca free tier: 200 API calls a minute** (Trey, 2026-11-22). The service paces itself under it, with interactive requests first, as with ThetaData. Every page of a paginated response counts as a call. What Alpaca returns over the limit isn't known until an Alpaca spike (see [Open questions](#open-questions)).
 - **Billed sources** (Databento, when added) answer cost quotes freely. A billed pull refuses to run unless the request carries a dollar cap Trey approved.
 
 ## Interface
@@ -125,7 +126,7 @@ Clients need dates for earnings, economic releases and FOMC meetings.
    - `GET /events`: kind, date range, symbols
    - `GET /calendar`: sessions in a range
 2. **Read-only SQL:** `POST /sql` runs DuckDB SQL against the store and returns only the result. A backtest sends its query, not a request for raw rows: "average 0DTE spread by minute over 1,100 days" comes back as 265 rows. The service first fills any units the query's date range needs, then runs it.
-3. **Theta-compatible paths:** `GET /v3/<endpoint>?<same params>` returning the terminal's CSV columns, so existing clients and old scripts only change their base URL.
+3. **Theta-compatible paths (not settled, see [Open questions](#open-questions)):** `GET /v3/<endpoint>?<same params>` returning the terminal's CSV columns, so existing clients and old scripts would only change their base URL.
 4. **Jobs:** `POST /jobs` with a list of requests to prefetch, `GET /jobs/<id>` for progress. A job runs on the server, so it survives a client disconnecting. The main backtest universe fetch is one job.
 5. **Status:** `GET /status` shows queue depth per source, ThetaData slots in use, store and catalog health, and last merge.
 
@@ -185,5 +186,8 @@ DuckLake keeps a table as ordinary Parquet files plus a small SQL database, the 
 
 ## Open questions
 
+- **Theta-compatible `/v3` paths:** whether the service offers them at all (Trey, 2026-11-22: not settled).
+- **Alpaca spike:** what it returns over the 200 calls/min limit, its page size for bars, and whether a multi-symbol request saves calls. Not probed yet.
+- **The 09:30 row:** staging gives zero quotes at 09:30:00 and ThetaDataDx gives a 0 underlying price there. Work out what ThetaData actually returns at the open, across days and environments, before any first-print rule (Trey, 2026-11-22).
 - **Backups:** of the catalog, and of the never-delete stock EOD at least. Everything else can be refetched.
 - **Merge schedule and grace period**, and why merged months came out about 1.6 times bigger than bulk-loaded ones in the benchmark (56 MB against 33–37 MB).
