@@ -4,45 +4,21 @@ Skipped only when no service settings exist at all; a broken .env fails the test
 """
 import dataclasses
 import logging
-import os
 import threading
 import time
-import uuid
-from pathlib import Path
 
-import psycopg
 import pytest
 from starlette.testclient import TestClient
 
-from market_data.app import create_app
-from market_data.config import Secret, load_settings
+from market_data.app import create_app as _create_app
+from market_data.config import Secret
 from market_data.store import Store, StoreError
 
-
-def _conninfo(s, dbname):
-    return dict(host=s.catalog_host, port=s.catalog_port, user=s.catalog_user,
-                password=s.catalog_password.reveal(), dbname=dbname, autocommit=True)
+from conftest import drop_catalog_db as _drop, fake_fetch
 
 
-@pytest.fixture
-def settings(tmp_path):
-    if not (Path(".env").exists() or "MD_ENV_FILE" in os.environ or os.environ.get("MD_CATALOG_PASSWORD")):
-        pytest.skip("no service settings (.env, MD_ENV_FILE or MD_CATALOG_PASSWORD)")
-    base = load_settings()  # a ConfigError here fails the test
-    db = f"md_test_{uuid.uuid4().hex[:12]}"
-    try:
-        with psycopg.connect(**_conninfo(base, base.catalog_db)) as c:
-            c.execute(f"CREATE DATABASE {db}")
-    except psycopg.OperationalError as e:
-        pytest.skip(f"catalog not reachable: {e}")
-    yield dataclasses.replace(base, catalog_db=db, data_dir=tmp_path)
-    with psycopg.connect(**_conninfo(base, base.catalog_db)) as c:
-        c.execute(f"DROP DATABASE IF EXISTS {db} WITH (FORCE)")
-
-
-def _drop(settings):
-    with psycopg.connect(**_conninfo(settings, "postgres")) as c:
-        c.execute(f"DROP DATABASE {settings.catalog_db} WITH (FORCE)")
+def create_app(settings):
+    return _create_app(settings, calendar_fetch=fake_fetch())
 
 
 def test_status_answers(settings, caplog):
@@ -53,7 +29,8 @@ def test_status_answers(settings, caplog):
     assert body["service"] == "market-data"
     store = body["store"]
     assert store["ok"] and store["catalog_format"] == "1.1"
-    assert store["latest_snapshot"] == 0  # empty catalog: just the creating snapshot
+    assert store["latest_snapshot"] == 18  # creation, 2 calendar tables, 16 calendar years (2012-2027)
+    assert body["calendar"]["ok"] and body["calendar"]["first"] == "2012-01-01"
     assert store["data_path"] == str(settings.data_dir / "lake")
     pw = settings.catalog_password.reveal()
     assert pw not in r.text and pw not in caplog.text

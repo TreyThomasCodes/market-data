@@ -1,0 +1,1162 @@
+{
+ "2012": [
+  {
+   "date": "2012-01-02",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-01-16",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-02-20",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-04-06",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-05-28",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2012-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-09-03",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-10-29",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-10-30",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-11-22",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2012-11-23",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2012-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2012-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2013": [
+  {
+   "date": "2013-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-01-21",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-02-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-03-29",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-05-27",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2013-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-09-02",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-11-28",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2013-11-29",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2013-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2013-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2014": [
+  {
+   "date": "2014-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-01-20",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-02-17",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-04-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-05-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2014-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-09-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-11-27",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2014-11-28",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2014-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2014-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2015": [
+  {
+   "date": "2015-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-01-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-02-16",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-04-03",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-05-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-07-03",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-09-07",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-11-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2015-11-27",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2015-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2015-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2016": [
+  {
+   "date": "2016-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-01-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-02-15",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-03-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-05-30",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-09-05",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-11-24",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2016-11-25",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2016-12-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2017": [
+  {
+   "date": "2017-01-02",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-01-16",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-02-20",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-04-14",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-05-29",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2017-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-09-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-11-23",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2017-11-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2017-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2018": [
+  {
+   "date": "2018-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-01-15",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-02-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-03-30",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-05-28",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2018-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-09-03",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-11-22",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-11-23",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2018-12-05",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2018-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2018-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2019": [
+  {
+   "date": "2019-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-01-21",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-02-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-04-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-05-27",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2019-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-09-02",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-11-28",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2019-11-29",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2019-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2019-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2020": [
+  {
+   "date": "2020-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-01-20",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-02-17",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-04-10",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-05-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-07-03",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-09-07",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-11-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2020-11-27",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2020-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2020-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2021": [
+  {
+   "date": "2021-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-01-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-02-15",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-04-02",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-05-31",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-07-05",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-09-06",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-11-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2021-11-26",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2021-12-24",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2022": [
+  {
+   "date": "2022-01-17",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-02-21",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-04-15",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-05-30",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-06-20",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-09-05",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-11-24",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2022-11-25",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2022-12-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2023": [
+  {
+   "date": "2023-01-02",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-01-16",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-02-20",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-04-07",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-05-29",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-06-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2023-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-09-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-11-23",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2023-11-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2023-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2024": [
+  {
+   "date": "2024-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-01-15",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-02-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-03-29",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-05-27",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-06-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2024-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-09-02",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-11-28",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2024-11-29",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2024-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2024-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2025": [
+  {
+   "date": "2025-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-01-09",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-01-20",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-02-17",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-04-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-05-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-06-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-07-03",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2025-07-04",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-09-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-11-27",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2025-11-28",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2025-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2025-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2026": [
+  {
+   "date": "2026-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-01-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-02-16",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-04-03",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-05-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-06-19",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-07-03",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-09-07",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-11-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2026-11-27",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2026-12-24",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2026-12-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ],
+ "2027": [
+  {
+   "date": "2027-01-01",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-01-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-02-15",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-03-26",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-05-31",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-06-18",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-07-05",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-09-06",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-11-25",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  },
+  {
+   "date": "2027-11-26",
+   "status": "early_close",
+   "open": "09:30:00",
+   "close": "13:00:00"
+  },
+  {
+   "date": "2027-12-24",
+   "status": "full_close",
+   "open": null,
+   "close": null
+  }
+ ]
+}

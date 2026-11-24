@@ -2,7 +2,7 @@
 
 Trey's market-data service. It fetches data from every outside source once, keeps it in one store, and serves it to every client project through one HTTP API.
 
-**Status: Phase 0 (skeleton) done 2026-11-22; Phase 1 (calendar) next.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
+**Status: Phase 1 (calendar) done 2026-11-22; Phase 2 (store) next.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
 
 ## Why
 
@@ -166,6 +166,8 @@ Clients need dates for earnings, economic releases and FOMC meetings.
       - **The 2025-01-09 closure** (national day of mourning): the overnight session ends at 09:25 as normal; evening session from 20:15.
       - Half days: no evening session after Friday 2024-11-29 (a Friday); an evening session after Thursday 2025-07-03 (before the July 4 holiday).
       - So the calendar needs holiday GTH hours per holiday. ThetaData's `calendar_year` doesn't carry them. By Cboe's rule (above), all GTH between two regular sessions takes the next business day's trade date. For Thanksgiving 2024 that puts Wednesday evening through Thursday 11:30 and Thursday evening into trade date Friday 2024-11-29. That assignment is Cboe's rule, not visible in ThetaData's data.
+      - **Every holiday 2022–2026, 2026-11-22** (`spikes/holiday_evenings.py` with each holiday's evening before and the holiday itself). The rule holds without exception from 2022-05 on: no evening session before Christmas, New Year's Day or Good Friday (including Christmas and New Year observed on a Monday: nothing on Sunday 2022-12-25, 2023-01-01, 2023-12-31); before every other holiday (MLK, Presidents, Memorial, Juneteenth, July 4, Labor Day, Thanksgiving, also when observed on a Friday, 2026-06-19 and 2026-07-03) the evening session runs on to about 11:30 on the holiday; and an evening session opens at 20:15 on any holiday that isn't a Friday. Cboe's hours page (cboe.com/about/hours/us-options, read 2026-11-22) lists the same hours for 2026 and 2027. Two gaps in ThetaData, not in the rule: nothing at all on MLK and Presidents Day 2022 (Sunday evening and the holiday), though the morning after has GTH from 00:00; and no 20:15–24:00 ticks on New Year's Day 2026, though Cboe lists that session and 2026-01-02 has ticks from 00:00.
+      - **When GTH and the curb start per root, 2026-11-22** (`spikes/calendar_probe.py`: bisection over trading days 2022-01-18 to 2026-11-19, near-the-money non-expiring call, more than 10 real quotes counts). First trade date with GTH quotes: SPX and SPXW already on 2022-01-18, VIX 2022-03-15, XSP 2022-12-12, RUTW 2026-02-11 (no RUTW chain at 12:00 on 02-09 and 02-10). Curb: SPX, SPXW and VIX 2022-04-25, XSP 2023-01-11, RUTW 2026-02-11. NDXP has neither. `calendar_year` answers for 2012–2027 (NotFound before 2012 and for 2028); early closes are all 09:30–13:00.
       - ThetaDataDx logs a warning above about 100 MB of response (the 1-second chain and the contract's ticks) and suggests `.stream(handler)`.
   - A new login invalidates the previous one on the same account and environment. So the service makes one client and shares it across its threads, and nothing else logs in to production while it runs. Trey's terminal is on the staging environment and isn't disturbed. A ThetaDataDx login to staging on 2026-11-21 didn't disturb the terminal either.
   - Over the limit fails at once with `RESOURCE_EXHAUSTED`; nothing queues on ThetaData's side. The service holds itself to 4 and treats `RESOURCE_EXHAUSTED` as "retry shortly", not as an outage.
@@ -248,6 +250,12 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
 - The labelling functions: from (`ts`, product, expiration) to (`trade_date`, `session`). Snapshots use (start, end], and events and bars use [start, end).
 - `GET /calendar`.
 - Done when: every probed date gives the measured answer. That includes 2024-03-14 (GTH to 09:15), 2024-08-26 (09:25 from then), 2024-11-28 (Thanksgiving GTH to 11:30), 2025-01-19 (Sunday before MLK), 2025-07-03 (half day with an evening session), and the 09:30:00 row falling outside regular hours.
+- **Done 2026-11-22.** `src/market_data/calendar.py` (rules and labels), `calendar_store.py` (stored years, refresh), `thetadata.py` (`calendar_year` only, until Phase 3's shared client), `GET /calendar`.
+  - `calendar_year` for 2012 to next year is stored in DuckLake (`calendar_days`, `calendar_years`), each year in one transaction. Past years are kept; the current and next year are refetched once a day, and a change is logged. The service refreshes at start (off the event loop), then checks hourly, fetching only what's due; each fetch logs in to production and closes, and a next year ThetaData hasn't published is asked for at most once a day. A refresh stores all its years or none. Without a key, or while ThetaData is down, it serves what's stored; `/status` fails only when no calendar covers today.
+  - Holidays are named by rule (`exchange_holidays`), since `calendar_year` gives no names; a test checks every full close 2012–2027 is a named holiday or one of the four special closures, and every named holiday is a full close. Holiday GTH hours are kept per holiday kind (above), not per date.
+  - Trade date: rolls at 20:15 ET for every product; on a day that isn't a trading day a row takes the next trading day. Sessions: options `gth`, `pre`, `rth`, `curb`; stocks `pre` (04:00), `rth`, `post` (to 20:00); `closed` for any time in no session. The names are proposed, not settled (Open questions). Events and bars by `bar_start` use [start, end), snapshots (start, end], including at the 20:15 roll.
+  - `label_frame` labels a frame by joins: 0.02 s for a one-minute SPXW chain day, 0.84 s for a one-second one (8.4M rows); tests check it equals the per-row `label` on a grid around every session boundary.
+  - `GET /calendar?root=&start=&end=[&expiration=][&asset=stock]`: Arrow, trade_date, session, start, end (ET).
 
 **Phase 2: The store.** No fetching yet.
 - One table per kind:
@@ -322,4 +330,11 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
   - **Accepted:** Starlette on uvicorn, with each response's headers and body sent in one write.
 - **When a date is complete:** with no EOD report to wait for, the service needs its own rule. Being measured: `spikes/date_completeness.py` watches trade date 2026-11-23 at 18 checks from 10:30 ET that day to 09:00 ET on 2026-11-25 (row counts, last timestamps, checksums, errors). ThetaData files the evening GTH session under the calendar date until 23:59, and its docs say "data from the previous day isn't available from 00:00 ET to 01:45 ET".
 - **Backups: decided (Trey, 2026-11-22).** A nightly `pg_dump` of the catalog plus a weekly copy of the Parquet directory to the `backups` share on Trey's TrueNAS server (Trey, 2026-11-22; not mounted on this box yet). How the service authenticates waits until TrueNAS's share setup changes, which Trey plans.
+- **Calendar, left open by Phase 1 (2026-11-22):**
+  - Session names (`gth`, `pre`, `rth`, `curb`, `post`, `closed`) are a proposal.
+  - A tick a few milliseconds after a session's end (the closing quotes at 09:15:00.386, 16:15:00.0xx) is labelled `closed`. How many rows that is gets counted in Phase 3.
+  - GTH and curb start dates are the first dates ThetaData has them, not exchange announcements. Equity-option pre-market is set from 2026-10-19 for SPY, QQQ, IWM, GLD, XLF, AAPL, TSLA and NVDA; only SPY's start was found by bisection.
+  - TLT and SMH are treated as 16:00 products, though they quoted 16:00–16:15 on 2026-11-19 (the ETF spike below). RUT (AM) isn't listed; it falls back to 09:30–16:00.
+  - Stock post-market on half days is set to end at 20:00, not probed (Alpaca spike).
+  - Settlement instants per root aren't in the calendar yet.
 - **Merge schedule and grace period**, and why merged months came out about 1.6 times bigger than bulk-loaded ones in the benchmark (56 MB against 33–37 MB).
