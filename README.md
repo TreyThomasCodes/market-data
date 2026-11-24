@@ -18,7 +18,7 @@ What it doesn't change: the first fetch is still limited by each source's speed.
 
 1. **Store:** DuckLake, with its catalog in a Postgres instance of its own on the main box, not a database on the existing Timescale instance. Measured against TimescaleDB, see [Why DuckLake](#why-ducklake).
 2. **Repo:** this one, separate from the research repo, because other clients use it too.
-3. **Host:** straight on Trey's main box for now (16 cores, 125 GB RAM, local NVMe), where the research repo's backtests already run. Queries run inside the service, so it needs real cores.
+3. **Host:** straight on Trey's main box for now (16 cores, 125 GB RAM, local NVMe), where the research backtests already run. Queries run inside the service, so it needs real cores.
 4. **Live data** (IBKR quotes for live trading) comes later. Results keep the same shapes, so adding live data doesn't change callers.
 5. **First sources:** ThetaData (intraday included), Alpaca, Alphanume, the trading calendar, and event dates (earnings, economic releases). NT8 and Databento after.
 
@@ -187,7 +187,7 @@ Clients need dates for earnings, economic releases and FOMC meetings.
    - `GET /events`: kind, date range, symbols
    - `GET /calendar`: sessions in a range
 2. **No SQL endpoint (Trey, 2026-11-22).** SQL against the tables would tie clients to the table layout, which is exactly what the API exists to prevent, and it would need its own scope and lockdown machinery. If a measured workload is too slow through typed calls, it gets its own typed endpoint.
-3. **No ThetaData-compatible paths (Trey, 2026-11-22): a clean break.** existing clients and old scripts move to the typed calls and `md.py`; nothing mimics the terminal's URLs or CSV columns.
+3. **No ThetaData-compatible paths (Trey, 2026-11-22): a clean break.** Existing clients and old scripts move to the typed calls and `md.py`; nothing mimics the terminal's URLs or CSV columns.
 4. **Jobs:** `POST /jobs` with a list of requests to prefetch, `GET /jobs/<id>` for progress. A job runs on the server, so it survives a client disconnecting. The main backtest universe fetch is one job.
 5. **Status:** `GET /status` shows queue depth per source, ThetaData slots in use, store and catalog health, and last merge.
 

@@ -1,8 +1,8 @@
 """Time the backtests' typical questions against each store. Usage: bench.py [parquet|tsdb]"""
-import csv, gzip, io, statistics, sys, time
+import csv, gzip, io, os, statistics, sys, time
 import duckdb, psycopg
 
-D = "2024-03-14"          # a mid-sample Thursday
+D = "2024-03-14"          # a mid-sample day
 SRC = os.environ.get("BENCH_CSV", "")  # one cached gzip CSV answer for D's chain, for the baseline
 
 # {store} is replaced by the table expression
