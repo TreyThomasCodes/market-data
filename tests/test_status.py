@@ -29,7 +29,7 @@ def test_status_answers(settings, caplog):
     assert body["service"] == "market-data"
     store = body["store"]
     assert store["ok"] and store["catalog_format"] == "1.1"
-    assert store["latest_snapshot"] == 18  # creation, 2 calendar tables, 16 calendar years (2012-2027)
+    assert store["latest_snapshot"] == 19  # creation, the data tables (one transaction), 2 calendar tables, 16 calendar years
     assert body["calendar"]["ok"] and body["calendar"]["first"] == "2012-01-01"
     assert store["data_path"] == str(settings.data_dir / "lake")
     pw = settings.catalog_password.reveal()

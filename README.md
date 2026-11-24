@@ -2,7 +2,7 @@
 
 Trey's market-data service. It fetches data from every outside source once, keeps it in one store, and serves it to every client project through one HTTP API.
 
-**Status: Phase 1 (calendar) done 2026-11-22; Phase 2 (store) next.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
+**Status: Phase 2 (store) done 2026-11-24; Phase 3 (fetching from ThetaData) next.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
 
 ## Why
 
@@ -60,7 +60,7 @@ The service is the only writer. The one exception is reading a Parquet file by h
 
 **Fetch units, not queries.** A request is answered from the store when every unit it touches is covered. Otherwise the missing units are fetched and stored, then the answer is read from the store, so a client sees the same data whether or not a fetch happened. A request for one minute of a chain fetches the whole regular session at that interval, because the next script will want another minute. Other sessions are fetched only when a request asks for them.
 
-**Coverage.** A table in the catalog database records each unit fetched, when, and its row count. Empty answers count, so weekends, holidays and delisted names are never fetched twice. To refetch something a source has corrected, delete its coverage row. There's no version history.
+**Coverage.** A DuckLake table records each unit fetched, when, and its row count, committed with the unit's rows. Empty answers count, so weekends, holidays and delisted names are never fetched twice. To refetch something a source has corrected, delete its coverage row. There's no version history.
 
 **Freshness.**
 - **Today isn't stored.** Requests for a date whose data isn't complete yet pass through uncached. When a date counts as complete is open (see Open questions).
@@ -267,6 +267,14 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
 - The read path: list a request's units and split them into covered and missing.
 - The label check: recompute `trade_date` and `session` and compare.
 - Done when: the reads-while-writing correctness test from `spikes/storage/rw.py` passes as a real test. Merge settings wait for the merge spike.
+- **Done 2026-11-24.** `src/market_data/tables.py` (tables), `units.py` (fetch units, planning, covered or missing), `writer.py` (the write path, the label check, compaction). Tables are created at start, in one transaction.
+  - Tables: `option_quote` (interval quotes), `option_quote_tick` (with `seq`), `option_trade_quote`, `option_greeks` (first order), `option_ohlc` (`bar_start`, `bar_end`), `option_open_interest`, `option_contracts`, and `coverage`. Columns follow ThetaDataDx 0.9.0's records (read from its type stubs, not a fetch); Phase 3 converts to them. Partitioned by trade-date year and month (`option_contracts` by its date); rows written sorted by root, expiration, strike, right, interval and time.
+  - A unit is (kind, root, ThetaData's date, window, and as the kind needs: expiration, interval, contract, list type). Its id is a 64-bit hash of that key, stored on each of its rows and on its coverage row, so a refetch deletes exactly its old rows. `coverage` is a DuckLake table, so `write_unit` replaces the unit's rows and its coverage row in one transaction; an empty answer is a coverage row with `n_rows` 0. The write refuses rows outside the unit (another root, expiration, interval, contract or date) and frames with missing or extra columns.
+  - Planning makes one unit per trading day, no later than the option's expiration, for regular hours only: windows for the other sessions are still open (Open questions), and asking for one raises.
+  - `check_labels` recomputes `trade_date` and `session` for a range of trade dates and reports mismatches.
+  - `compact(grace)` merges adjacent files, expires snapshots and deletes retired files older than the grace period. Nothing schedules it yet.
+  - `tests/test_reads_while_writing.py`: 6 point and 2 sweep reader threads check every answer while a writer lands units, refetches stored ones, and compacts with a 2-second grace, so files are deleted under the readers. No errors or wrong answers; with the rows and the coverage row committed separately it fails (35 wrong answers), so it catches what it's for.
+  - Left for later: a refetch leaves a delete file beside the data file, and merging doesn't fold it in (rewriting such files belongs with the merge spike). A calendar change doesn't relabel stored rows yet; that has to exist before Phase 3 stores real data.
 
 **Phase 3: Fetching from ThetaData**
 - One shared production client with 4 slots, bulk work limited to 3, `RESOURCE_EXHAUSTED` retried, `NotFoundError` stored as an empty answer, a pause during outages, single fetch for duplicate requests, and streaming for responses over about 100 MB.
