@@ -2,7 +2,7 @@
 
 Trey's market-data service. It fetches data from every outside source once, keeps it in one store, and serves it to every client project through one HTTP API.
 
-**Status: Phase 2 (store) done 2026-11-24; Phase 3 (fetching from ThetaData) next.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
+**Status: Phase 2 (store) done 2026-11-24; Phase 3 (fetching from ThetaData) in progress.** Trey settled the main choices on 2026-11-21 and 2026-11-22 (below and in Open questions, where each is marked). The order of work is in [Build plan](#build-plan).
 
 ## Why
 
@@ -288,6 +288,12 @@ Revised 2026-11-22 to match the decisions above. Each phase ends with a check th
   5. 1-second data and ticks per contract, and `trade_quote`.
   6. Index levels from Greeks.
 - Done when: the SPXW 0DTE chain for 2024-03-14 at 1 minute is fetched once, answered from the store the second time, and matches the probe (135,286 rows).
+- **In progress, 2026-11-24: built and tested without a login** (a fake ThetaDataDx client raising its real exception classes). Live checks wait until no other production session must stay up (the date-completeness monitor ends 2026-11-25 09:00 ET).
+  - `theta_client.py`: one production client for the whole service, the calendar refresh included (a second login would replace the session). ThetaDataDx's pool is fixed at 4 and its own bulk sharding is off, so a unit is one request in the server's order. Slots: 4 in flight, bulk at most 3, waiting interactive requests first. `NotFoundError` is an empty answer; `RateLimitError` is retried and never counts as an outage (ThetaDataDx retries it up to 20 times first); `UnavailableError`, `NetworkError` and `DeadlineExceededError` are retried with backoff, and 3 within 60 s pause every request while one `calendar_year` probe runs every 90 s until it answers; anything else is raised. `/status` shows the client's state.
+  - `ingest.py`: conversions from ThetaDataDx frames for every Phase 2 table (columns as its type stubs give them). Anything unexpected (a missing column, an unknown right, strikes that look like 1/1000ths) raises, and nothing is stored.
+  - `fetcher.py`: a unit's call covers regular hours from the calendar (09:30 to 16:00 expiring, 16:15 not, 13:00/13:15 on half days), since ThetaDataDx defaults to 09:30-16:00. Missing units are fetched 4 at a time, duplicates share one fetch, and NotFound is stored as an empty unit. Dates that may be incomplete aren't stored: until the completeness rule is set, nothing after yesterday, or the day before before 02:00 ET.
+  - Not built yet: streaming for responses over about 100 MB (1-second chains, ticks), the kinds after 1-minute quotes beyond their conversions, and index levels.
+  - **To confirm on the first production fetch:** column names and types of `to_polars()` (stubs only so far); strikes in dollars; `right` as `C`/`P`; that `end_time` includes the 16:00:00 row (the probe's 135,286 = 346 contracts × 391 minutes says it does); `strike` as `"5145"` and intervals as `"1m"`/`"15m"`/`"tick"` accepted. Later, with a GTH window: how `ms_of_day` counts on the day clocks go back (the repeated hour raises until then). How ThetaDataDx fails during a real outage, and so the pause thresholds, isn't observed yet.
 
 **Phase 4: The API and `md.py`**
 - `GET /chain`, `/quotes`, `/bars`, `/calendar` and `/status`, then `/jobs`.
