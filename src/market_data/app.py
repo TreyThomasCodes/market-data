@@ -18,6 +18,7 @@ from .calendar_store import CalendarService, Fetch
 from .config import Settings
 from .store import Store
 from .tables import ensure_tables
+from .writer import relabel_pending
 from .thetadata import fetch_calendar_years
 
 ARROW = "application/vnd.apache.arrow.stream"
@@ -113,7 +114,7 @@ def create_app(settings: Settings, calendar_fetch: Fetch | None | object = _THET
     async def lifespan(app: Starlette):
         store = Store(settings)
         store.attach()
-        cal = CalendarService(store, calendar_fetch)
+        cal = CalendarService(store, calendar_fetch, on_change=lambda c: relabel_pending(store, c))
         try:
             await run_in_threadpool(ensure_tables, store)
             await run_in_threadpool(cal.start)  # may fetch from ThetaData: off the event loop

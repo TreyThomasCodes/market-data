@@ -4,14 +4,15 @@ ThetaData's `calendar_year` answers are stored in two DuckLake tables: `calendar
 `calendar_years` (when each year was fetched, and how many rows). A year and its rows are written in one transaction.
 
 Past years are kept forever, like every other past date (README: Freshness). The current and next year are
-refetched once a day, because closures can be announced at short notice (2025-01-09 was). A change is logged; once
-Phase 2 stores labelled rows, a change also has to relabel the months it touches.
+refetched once a day, because closures can be announced at short notice (2025-01-09 was). A change is logged, and
+the changed dates go into `relabel_pending` in the same transaction as the new year, so stored rows near them are
+relabelled (`writer.relabel_pending`) even if the service stops before that runs.
 """
 from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import date, datetime, timedelta, timezone
 
 from .calendar import ET, FIRST_YEAR, Calendar, CalendarError, Day, from_rows
@@ -29,6 +30,7 @@ DDL = [
     "open_time TIME, close_time TIME)",
     f"CREATE TABLE IF NOT EXISTS {LAKE}.calendar_years (year INTEGER NOT NULL, fetched_at TIMESTAMPTZ NOT NULL, "
     "n_rows INTEGER NOT NULL)",
+    f"CREATE TABLE IF NOT EXISTS {LAKE}.relabel_pending (date DATE NOT NULL, noted_at TIMESTAMPTZ NOT NULL)",
 ]
 
 Fetch = Callable[[list[int]], dict[int, list[Day] | None]]
@@ -48,7 +50,10 @@ def load(store: Store) -> tuple[list[Day], dict[int, datetime]]:
     return days, years
 
 
-def save_year(store: Store, year: int, days: list[Day], fetched_at: datetime) -> None:
+def save_year(store: Store, year: int, days: list[Day], fetched_at: datetime,
+              changed: Iterable[date] = ()) -> None:
+    """Store a year's calendar_year answer; `changed` dates (where it differs from what was stored) are queued for
+    relabelling in the same transaction."""
     for d in days:
         if d.date.year != year:
             raise CalendarError(f"calendar_year {year} returned {d.date}")
@@ -61,6 +66,9 @@ def save_year(store: Store, year: int, days: list[Day], fetched_at: datetime) ->
                 cur.executemany(f"INSERT INTO {LAKE}.calendar_days VALUES (?, ?, ?, ?)",
                                 [(d.date, d.status, d.open, d.close) for d in days])
             cur.execute(f"INSERT INTO {LAKE}.calendar_years VALUES (?, ?, ?)", [year, fetched_at, len(days)])
+            changed = sorted(set(changed))
+            if changed:
+                cur.executemany(f"INSERT INTO {LAKE}.relabel_pending VALUES (?, ?)", [(d, fetched_at) for d in changed])
             cur.execute("COMMIT")
         except Exception:
             cur.execute("ROLLBACK")
@@ -70,9 +78,14 @@ def save_year(store: Store, year: int, days: list[Day], fetched_at: datetime) ->
 class CalendarService:
     """Holds the current `Calendar`; loads it from the store and refreshes it from ThetaData in a thread."""
 
-    def __init__(self, store: Store, fetch: Fetch | None, now: Callable[[], datetime] | None = None):
+    def __init__(self, store: Store, fetch: Fetch | None, now: Callable[[], datetime] | None = None,
+                 on_change: Callable[[Calendar], object] | None = None):
+        """`on_change` runs after every refresh check with the current calendar (the service relabels pending
+        dates there); it's cheap when nothing is pending, and a failure is retried at the next check."""
         self.store = store
         self.fetch = fetch
+        self.on_change = on_change
+        self.last_relabel_error: str | None = None
         self.now = now or (lambda: datetime.now(timezone.utc))
         self._cal: Calendar | None = None
         self._fetched: dict[int, datetime] = {}
@@ -156,11 +169,13 @@ class CalendarService:
                     if self._stop.is_set():
                         break
                     old = {d for d in old_days if d.date.year == y}
+                    changed = set()
                     if y in self._fetched and old != set(rows):
                         log.warning("calendar %d changed: removed %s, added %s", y,
                                     sorted(d.date.isoformat() for d in old - set(rows)),
                                     sorted(d.date.isoformat() for d in set(rows) - old))
-                    save_year(self.store, y, rows, now)
+                        changed = {d.date for d in old ^ set(rows)}
+                    save_year(self.store, y, rows, now, changed)
                     self._unpublished.pop(y, None)
                     stored.append(y)
             finally:
@@ -170,17 +185,29 @@ class CalendarService:
             return stored
 
     def _refresh_logged(self) -> bool:
+        ok = True
         try:
             stored = self.refresh()
             if stored:
                 log.info("calendar years stored: %s", stored)
             self.last_error = None
-            return True
         except Exception as e:
             # Our own errors are shown; anything else by type only, in case it carries account details.
             self.last_error = str(e) if isinstance(e, CalendarError) else type(e).__name__
             log.warning("calendar refresh failed: %s", self.last_error)
-            return False
+            ok = False
+        self._relabel_logged()
+        return ok
+
+    def _relabel_logged(self) -> None:
+        if self.on_change is None or self._cal is None:
+            return
+        try:
+            self.on_change(self._cal)
+            self.last_relabel_error = None
+        except Exception as e:
+            self.last_relabel_error = f"{type(e).__name__}: {e}"
+            log.warning("relabelling failed (retried at the next check): %s", self.last_relabel_error)
 
     def _run(self) -> None:
         ok = self.last_error is None
@@ -199,4 +226,5 @@ class CalendarService:
             "last": cal.last.isoformat() if cal else None,
             "last_refresh": self.last_refresh.isoformat() if self.last_refresh else None,
             "error": self.last_error,
+            "relabel_error": self.last_relabel_error,
         }

@@ -148,3 +148,68 @@ def compact(store: Store, grace: timedelta) -> None:
         cur.execute(f"CALL ducklake_merge_adjacent_files('{LAKE}')")
         cur.execute(f"CALL ducklake_expire_snapshots('{LAKE}', older_than => ?::TIMESTAMPTZ)", [cutoff])
         cur.execute(f"CALL ducklake_cleanup_old_files('{LAKE}', older_than => ?::TIMESTAMPTZ)", [cutoff])
+
+
+# A calendar change on date c can move the labels of rows dated a few days before it (their next trading day) and
+# after it (sessions of the trade dates around it). Ten days either side covers a weekend plus a holiday run.
+RELABEL_REACH = timedelta(days=10)
+
+
+def relabel_unit(store: Store, cal: Calendar, kind: str, unit_id: int, d: date) -> int:
+    """Recompute a stored unit's labels; if any changed, replace its rows with relabelled ones in one transaction
+    (coverage is untouched: the unit and its row count are the same). Returns the number of rows whose labels
+    changed."""
+    t = TABLES[kind]
+    lo, hi = d, d + RELABEL_REACH  # where its rows can be under any calendar
+    where = f'unit_id = ? AND "{t.partition_col}" BETWEEN ? AND ?'
+    name = f"relabel_{next(_names)}"
+    with store.cursor() as cur:
+        cur.execute("BEGIN")
+        try:
+            df = cur.sql(f"SELECT * FROM {LAKE}.{t.name} WHERE {where}", params=[unit_id, lo, hi]).pl()
+            if not df.height:
+                cur.execute("COMMIT")
+                return 0
+            frame = df.select(pl.col(t.time).alias("ts"), "root", "expiration")
+            new = cal.label_frame(frame, t.label).select("trade_date", "session")
+            moved = df.filter((df["trade_date"] != new["trade_date"]) | (df["session"] != new["session"])).height
+            if not moved:
+                cur.execute("COMMIT")
+                return 0
+            out = df.with_columns(new).select(t.names).sort(t.sort, maintain_order=True)
+            cur.register(name, out.to_arrow())
+            try:
+                cur.execute(f"DELETE FROM {LAKE}.{t.name} WHERE {where}", [unit_id, lo, hi])
+                cur.execute(f"INSERT INTO {LAKE}.{t.name} BY NAME SELECT * FROM {name}")
+            finally:
+                cur.unregister(name)
+            cur.execute("COMMIT")
+            return moved
+        except Exception:
+            cur.execute("ROLLBACK")
+            raise
+
+
+def relabel_pending(store: Store, cal: Calendar) -> dict:
+    """Relabel the stored units near every date in `relabel_pending`, then clear those dates. Dates noted while
+    this runs stay for the next call. A failure leaves everything pending (units already done are just checked
+    again next time). Returns counts."""
+    with store.cursor() as cur:
+        pending = cur.execute(f"SELECT date, max(noted_at) FROM {LAKE}.relabel_pending GROUP BY 1").fetchall()
+    if not pending:
+        return {"dates": 0, "units": 0, "rows": 0}
+    lo = min(d for d, _ in pending) - RELABEL_REACH
+    hi = max(d for d, _ in pending) + RELABEL_REACH
+    reach = {d + timedelta(days=i) for d, _ in pending
+             for i in range(-RELABEL_REACH.days, RELABEL_REACH.days + 1)}
+    kinds = [k for k, t in TABLES.items() if t.label]
+    with store.cursor() as cur:
+        units = cur.execute(
+            f"SELECT unit_id, kind, date FROM {LAKE}.coverage WHERE date BETWEEN ? AND ? AND n_rows > 0 "
+            "AND kind IN (SELECT unnest(?::VARCHAR[])) ORDER BY date, kind", [lo, hi, kinds]).fetchall()
+    units = [u for u in units if u[2] in reach]
+    rows = sum(relabel_unit(store, cal, kind, uid, d) for uid, kind, d in units)
+    with store.cursor() as cur:
+        cur.executemany(f"DELETE FROM {LAKE}.relabel_pending WHERE date = ? AND noted_at <= ?", pending)
+    log.info("relabelled %d row(s) in %d unit(s) near %d changed calendar date(s)", rows, len(units), len(pending))
+    return {"dates": len(pending), "units": len(units), "rows": rows}
